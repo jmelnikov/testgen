@@ -1,6 +1,23 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
 
+/**
+ * Class GenruS
+ * В данном варианте создаётся ещё одна таблица в полями id, is_loaded_big и is_loaded_small
+ * В полях хранятся id изображение, а так же статус файлов (1 - найден, 0 - не найден) для больших и маленьких картинок соответственно
+ * Каждый раз, перед вставкой новых данных, таблица очищается.
+ *
+ * Методы:
+ * scan_all_images - проверяет всю таблицу картинок на наличие их в файловой системе
+ * scan_all_big_images - проверяет только большие картинки
+ * scan_all_small_images - проверяет только маленькие картинки
+ * scan_only_missed_images - проверяет только те картинки, которые ранее были помечены как не загруженные
+ * get_missed_small_images_count - возвращает количество маленьких картинок, помеченных как не загруженные
+ * get_missed_big_images_count - возвращает количество больших картинок, помеченных как не загруженные
+ * get_missed_images_list - возвращает объект или массив с незагруженными картинками
+ * get_missed_small_images - возвращает объект или массив с незагруженными маленькими картинками
+ * get_missed_big_images - возвращает объект или массив с незагруженными большими картинками
+ */
 class GenruS
 {
 	protected $ci;
@@ -148,6 +165,12 @@ class GenruS
 		return $this->ci->db->count_all_results('images_status');
 	}
 
+	/**
+	 * @param bool $as_array
+	 * @return mixed
+	 * Метод возвращает объект (или массив, если параметром был передан true)
+	 * с ID и расположением изображений
+	 */
 	public function get_missed_images_list(bool $as_array = false)
 	{
 		$this->ci->db->select('images_status.id, product_id, image_small, image_big, is_loaded_small, is_loaded_big');
