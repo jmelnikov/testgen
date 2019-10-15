@@ -1,7 +1,7 @@
 <?php
 defined('BASEPATH') OR exit('No direct script access allowed');
 
-class Genru
+class GenruS
 {
 	protected $ci;
 
@@ -25,21 +25,21 @@ class Genru
 		$images_list = [];
 		foreach ($images->result() as $image) {
 			$tmp['id'] = $image->id;
-			$tmp['is_loaded_big'] = 0;
-			$tmp['is_loaded_small'] = 0;
-			// Здесь и далее предполагается, что папка с изображениями лежит в корне сайта и называется images
-			if (file_exists(FCPATH . 'images/' . $image->image_big)) {
-				$tmp['is_loaded_big'] = 1;
-			}
 
-			if (file_exists(FCPATH . 'images/' . $image->image_small)) {
-				$tmp['is_loaded_small'] = 1;
+			// Здесь и далее предполагается, что папка с изображениями лежит в корне сайта и называется images
+			$tmp['is_loaded_big'] = file_exists(FCPATH . 'images/' . $image->image_big) ? 1 : 0;
+			$tmp['is_loaded_small'] = file_exists(FCPATH . 'images/' . $image->image_small) ? 1 : 0;
+
+			if ($tmp['is_loaded_big'] == 1 && $tmp['is_loaded_small'] == 1) {
+				continue;
 			}
 
 			$images_list[] = $tmp;
 		}
 
-		$this->ci->db->update_batch('images', $images_list, 'id');
+		// Здесь и далее - очистка таблицы перед добавлением в неё списка не найденных файлов
+		$this->ci->db->truncate('images_status');
+		$this->ci->db->insert_batch('images_status', $images_list);
 	}
 
 	/**
@@ -56,13 +56,14 @@ class Genru
 			$tmp['is_loaded_big'] = 0;
 
 			if (file_exists(FCPATH . 'images/' . $image->image_big)) {
-				$tmp['is_loaded_big'] = 1;
+				continue;
 			}
 
 			$images_list[] = $tmp;
 		}
 
-		$this->ci->db->update_batch('images', $images_list, 'id');
+		$this->ci->db->truncate('images_status');
+		$this->ci->db->insert_batch('images_status', $images_list);
 	}
 
 	/**
@@ -79,13 +80,14 @@ class Genru
 			$tmp['is_loaded_small'] = 0;
 
 			if (file_exists(FCPATH . 'images/' . $image->image_small)) {
-				$tmp['is_loaded_small'] = 1;
+				continue;
 			}
 
 			$images_list[] = $tmp;
 		}
 
-		$this->ci->db->update_batch('images', $images_list, 'id');
+		$this->ci->db->truncate('images_status');
+		$this->ci->db->insert_batch('images_status', $images_list);
 	}
 
 	/**
@@ -93,11 +95,13 @@ class Genru
 	 */
 	public function scan_only_missed_images()
 	{
-		$this->ci->db->select('id, image_big, image_small, is_loaded_big, is_loaded_small');
-		$this->ci->db->or_where(['is_loaded_big' => 0, 'is_loaded_small' => 0]);
-		$images = $this->ci->db->get('images');
+		$this->ci->db->select('images_status.id, product_id, image_small, image_big, is_loaded_small, is_loaded_big');
+		$this->ci->db->from('images_status');
+		$this->ci->db->join('images', 'images.id = images_status.id');
+		$images = $this->ci->db->get();
 
 		$images_list = [];
+
 		foreach ($images->result() as $image) {
 			$tmp['id'] = (int)$image->id;
 			$tmp['is_loaded_big'] = $image->is_loaded_big;
@@ -113,10 +117,15 @@ class Genru
 				$tmp['is_loaded_small'] = file_exists(FCPATH . 'images/' . $image->image_small) ? 1 : 0;
 			}
 
+			if ($tmp['is_loaded_big'] == 1 && $tmp['is_loaded_small'] == 1) {
+				continue;
+			}
+
 			$images_list[] = $tmp;
 		}
 
-		$this->ci->db->update_batch('images', $images_list, 'id');
+		$this->ci->db->truncate('images_status');
+		$this->ci->db->insert_batch('images_status', $images_list);
 	}
 
 	/**
@@ -126,7 +135,7 @@ class Genru
 	public function get_missed_small_images_count(): int
 	{
 		$this->ci->db->where('is_loaded_small', 0);
-		return $this->ci->db->count_all_results('images');
+		return $this->ci->db->count_all_results('images_status');
 	}
 
 	/**
@@ -136,7 +145,21 @@ class Genru
 	public function get_missed_big_images_count(): int
 	{
 		$this->ci->db->where('is_loaded_big', 0);
-		return $this->ci->db->count_all_results('images');
+		return $this->ci->db->count_all_results('images_status');
+	}
+
+	public function get_missed_images_list(bool $as_array = false)
+	{
+		$this->ci->db->select('images_status.id, product_id, image_small, image_big, is_loaded_small, is_loaded_big');
+		$this->ci->db->from('images_status');
+		$this->ci->db->join('images', 'images.id = images_status.id');
+		$images = $this->ci->db->get();
+
+		if ($as_array) {
+			return $images->result_array();
+		} else {
+			return $images;
+		}
 	}
 
 	/**
@@ -147,9 +170,10 @@ class Genru
 	 */
 	public function get_missed_small_images(bool $as_array = false)
 	{
-		$this->ci->db->select('id, image_small');
+		$this->ci->db->select('images_status.id, image_small, is_loaded_small');
 		$this->ci->db->where('is_loaded_small', 0);
-		$images = $this->ci->db->get('images');
+		$this->ci->db->join('images', 'images.id = images_status.id');
+		$images = $this->ci->db->get('images_status');
 
 		if ($as_array) {
 			return $images->result_array();
@@ -166,9 +190,10 @@ class Genru
 	 */
 	public function get_missed_big_images(bool $as_array = false)
 	{
-		$this->ci->db->select('id, image_big');
+		$this->ci->db->select('images_status.id, image_big, is_loaded_big');
 		$this->ci->db->where('is_loaded_big', 0);
-		$images = $this->ci->db->get('images');
+		$this->ci->db->join('images', 'images.id = images_status.id');
+		$images = $this->ci->db->get('images_status');
 
 		if ($as_array) {
 			return $images->result_array();
