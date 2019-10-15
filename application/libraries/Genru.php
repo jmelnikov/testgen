@@ -7,7 +7,6 @@ class Genru
 
 	public function __construct()
 	{
-		$this->time = microtime(true);
 		// Получаем instance приложения
 		$this->ci = &get_instance();
 		// Подключаемся к БД
